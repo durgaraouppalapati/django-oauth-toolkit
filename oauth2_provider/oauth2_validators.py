@@ -775,7 +775,7 @@ class OAuth2Validator(RequestValidator):
     def get_oidc_claims(self, token, token_handler, request):
         # Required OIDC claims
         claims = {
-            "sub": str(request.user.id),
+            "sub": str(request.user.pk),
         }
 
         # https://openid.net/specs/openid-connect-core-1_0.html#StandardClaims
@@ -930,4 +930,17 @@ class OAuth2Validator(RequestValidator):
         return self.get_oidc_claims(None, None, request)
 
     def get_additional_claims(self, request):
-        return {}
+        """
+        Takes additional claims from users by exposing a function in settings,
+        if not provided by users returns {} as default
+        """
+        additional_claims = {}
+        if oauth2_settings.ADDITIONAL_CLAIMS_FUNCTION:
+            import importlib
+            import_path = oauth2_settings.ADDITIONAL_CLAIMS_FUNCTION
+            import_module, import_function = ".".join(
+                import_path.split(".")[:-1]), import_path.split(".")[-1]
+            additional_claims_function = getattr(
+                importlib.import_module(import_module), import_function)
+            additional_claims = additional_claims_function(request)
+        return additional_claims

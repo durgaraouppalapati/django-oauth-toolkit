@@ -1,6 +1,7 @@
 import json
 from urllib.parse import parse_qs, urlparse
 
+from django.test import override_settings
 from django.contrib.auth import get_user_model
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
@@ -461,3 +462,80 @@ class TestOpenIDConnectImplicitFlow(BaseTest):
         response = self.client.post(reverse("oauth2_provider:authorize"), data=form_data)
         self.assertEqual(response.status_code, 302)
         self.assertIn("error=access_denied", response["Location"])
+
+    def test_access_token_and_id_token_with_user_id_as_pk(
+            self):
+        """
+        Test for Change in accessing the user object id as user.id to user.pk
+        """
+        self.client.login(username="test_user", password="123456")
+        self.application.skip_authorization = True
+        self.application.save()
+
+        query_data = {
+            "client_id": self.application.client_id,
+            "response_type": "id_token token",
+            "state": "random_state_string",
+            "nonce": "random_nonce_string",
+            "scope": "openid",
+            "redirect_uri": "http://example.org",
+        }
+
+        response = self.client.get(reverse("oauth2_provider:authorize"), data=query_data)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("http://example.org#", response["Location"])
+        self.assertIn("access_token=", response["Location"])
+        self.assertIn("id_token=", response["Location"])
+        self.assertIn("state=random_state_string", response["Location"])
+
+        uri_query = urlparse(response["Location"]).fragment
+        uri_query_params = dict(parse_qs(uri_query, keep_blank_values=True, strict_parsing=True))
+        id_token = uri_query_params["id_token"][0]
+        jwt_token = jwt.JWT(key=self.key, jwt=id_token)
+        claims = json.loads(jwt_token.claims)
+        self.assertIn("nonce", claims)
+        self.assertIn("at_hash", claims)
+
+    @override_settings(ADDITIONAL_CLAIMS_FUNCTION='tests.test_implicit.additional_claims')
+    def test_access_token_and_id_token_with_additional_claims_function(
+            self):
+        """
+        Test for additional claims function
+        """
+        self.client.login(username="test_user", password="123456")
+        self.application.skip_authorization = True
+        self.application.save()
+
+        query_data = {
+            "client_id": self.application.client_id,
+            "response_type": "id_token token",
+            "state": "random_state_string",
+            "nonce": "random_nonce_string",
+            "scope": "openid",
+            "redirect_uri": "http://example.org",
+        }
+
+        response = self.client.get(reverse("oauth2_provider:authorize"), data=query_data)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("http://example.org#", response["Location"])
+        self.assertIn("access_token=", response["Location"])
+        self.assertIn("id_token=", response["Location"])
+        self.assertIn("state=random_state_string", response["Location"])
+
+        uri_query = urlparse(response["Location"]).fragment
+        uri_query_params = dict(parse_qs(uri_query, keep_blank_values=True, strict_parsing=True))
+        id_token = uri_query_params["id_token"][0]
+        jwt_token = jwt.JWT(key=self.key, jwt=id_token)
+        claims = json.loads(jwt_token.claims)
+        print(claims)
+        print("*"*100)
+        self.assertIn("nonce", claims)
+        self.assertIn("at_hash", claims)
+        self.assertIn("name", claims)
+
+
+def additional_claims(request):
+    print("Durgaaaaaaaaaaaaaaaaaaaaaaaa")
+    return {
+        "name": "username"
+    }

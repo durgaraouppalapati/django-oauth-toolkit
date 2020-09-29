@@ -94,6 +94,7 @@ DEFAULTS = {
     "RESOURCE_SERVER_TOKEN_CACHING_SECONDS": 36000,
     # Whether or not PKCE is required
     "PKCE_REQUIRED": False,
+    "ADDITIONAL_CLAIMS_FUNCTION": ""
 }
 
 # List of settings that cannot be empty
